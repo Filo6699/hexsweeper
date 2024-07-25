@@ -67,7 +67,7 @@ class Board:
         """
 
         tile = self.get_tile(x, y)
-        if tile == None or tile.state != State.COVERED:
+        if tile == None or tile.state == State.FLAGGED:
             return UncoverResult.NOTVALID
 
         if tile.is_mine:
@@ -75,14 +75,27 @@ class Board:
 
         queue = Queue()
         queue.put(tile)
+        info = self._get_neighbors(x, y)
+        if tile.state == State.UNCOVERED:
+            if info.flags_amount == info.mines_amount:
+                if info.flags != info.mines:
+                    return UncoverResult.MISTAKE
+                else:
+                    for n in info.tiles:
+                        if n.state == State.COVERED:
+                            n.state = State.UNCOVERED
+                            self._set_tile(n.x, n.y, n)
+                            queue.put(n)
         while not queue.empty():
             t: Tile = queue.get()
-            if t.state == State.COVERED:
-                if t.value == 0:
-                    for n in self._get_neighbors(t.x, t.y).tiles:
+            if t.value == 0:
+                for n in self._get_neighbors(t.x, t.y).tiles:
+                    if n.state == State.COVERED:
+                        n.state = State.UNCOVERED
+                        self._set_tile(n.x, n.y, n)
                         queue.put(n)
-                t.state = State.UNCOVERED
-                self._set_tile(t.x, t.y, t)
+        tile.state = State.UNCOVERED
+        self._set_tile(tile.x, tile.y, tile)
 
         return UncoverResult.SUCCESS
 

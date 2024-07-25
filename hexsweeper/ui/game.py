@@ -21,6 +21,8 @@ class Hexsweeper:
         self.board: Board = board
 
         self._board_collision = None
+        self._mistakes: int = 0
+        self._font = pg.font.SysFont("JetBrains Mono", self._tile_size // 2)
 
     @property
     def board(self):
@@ -61,8 +63,9 @@ class Hexsweeper:
 
         self.theme.scale = self.theme.initial_scale * (self._tile_size / 160)
         self._board_collision = None
+        self._font = pg.font.SysFont("", self._tile_size // 2)
 
-    def _draw_polygon(
+    def _draw_hexagon(
         self,
         center: Tuple[float, float],
         color: Tuple[int, int, int],
@@ -72,9 +75,11 @@ class Hexsweeper:
     ) -> None:
         """Draws a polygon on self.screen"""
 
+        collision = True
         if surface == None:
+            collision = False
             surface = self.screen
-        
+
         width = round(width)
         radius -= width // 2
         polygon_points = [
@@ -92,14 +97,33 @@ class Hexsweeper:
         )
 
     def _world_to_board(self, x: int, y: int) -> Optional[Tuple[int, int]]:
-        cell_pos = self._board_collision.get_at((x, y))
-        if (cell_pos[0] == 0):
+        if (
+            x < 0
+            or y < 0
+            or x >= self.screen.get_width()
+            or y >= self.screen.get_height()
+        ):
             return None
-        return (cell_pos[0] - 1, cell_pos[1] - 1)
+        cell_pos = self._board_collision.get_at((x, y))
+        if sum(cell_pos) == 255 * 3:
+            return None
+        x = cell_pos[0] + ((cell_pos[1] >> 4) << 8)
+        y = cell_pos[2] + ((cell_pos[1] % 16) << 8)
+        return (x, y)
 
-    def click(self, x: int, y: int):
-        x, y = self._world_to_board(x, y)
-        self.board.uncover(x, y)
+    def uncover(self, x: int, y: int):
+        pos = self._world_to_board(x, y)
+        if pos == None:
+            return
+        result = self.board.uncover(*pos)
+        if result == UncoverResult.MISTAKE:
+            self._mistakes += 1
+
+    def flag(self, x: int, y: int):
+        pos = self._world_to_board(x, y)
+        if pos == None:
+            return
+        self.board.flag(*pos)
 
     def draw(self) -> None:
         """Update the screen"""
@@ -132,43 +156,66 @@ class Hexsweeper:
                 ]
 
                 if update_collision:
-                    self._draw_polygon(
+                    self._draw_hexagon(
                         center,
-                        (x+1, y+1, 0),
+                        (x % 256, (((x >> 8) << 4) + (y >> 8)), y % 256),
                         tile_size / 2,
                         0,
                         surface=self._board_collision,
                     )
 
-                if tile.state == State.COVERED:
-                    self._draw_polygon(
-                        center,
-                        theme.cover_inner,
-                        tile_size / 2,
-                        0,
+                hexs = []
+
+                if tile.state in [State.COVERED, State.FLAGGED]:
+                    inner_color = (
+                        theme.cover_inner
+                        if tile.state == State.COVERED
+                        else theme.flag_inner
                     )
-                    self._draw_polygon(
-                        center,
-                        theme.shadow,
-                        tile_size / 2,
-                        (theme.shadow_width + theme.cover_outline_width) * theme.scale,
+                    hexs.append((inner_color, 0))
+                    shadow = [abs(c - 70) for c in inner_color]
+                    hexs.append(
+                        (
+                            shadow,
+                            max(
+                                (theme.shadow_width + theme.cover_outline_width)
+                                * theme.scale,
+                                1,
+                            ),
+                        )
                     )
-                    self._draw_polygon(
-                        center,
-                        theme.cover_outline,
-                        tile_size / 2,
-                        theme.cover_outline_width * theme.scale,
+                    hexs.append(
+                        (
+                            theme.cover_outline,
+                            max(theme.cover_outline_width * theme.scale, 1),
+                        )
                     )
+
                 if tile.state == State.UNCOVERED:
-                    self._draw_polygon(
-                        center,
-                        theme.inner,
-                        tile_size / 2,
-                        0,
+                    hexs.append((theme.inner, 0))
+                    hexs.append(
+                        (
+                            theme.inner_outline,
+                            max(theme.inner_outline_width * theme.scale, 1),
+                        )
                     )
-                    self._draw_polygon(
-                        center,
-                        theme.inner_outline,
-                        tile_size / 2,
-                        theme.inner_outline_width * theme.scale,
-                    )
+
+                for h in hexs:
+                    self._draw_hexagon(center, h[0], tile_size / 2, h[1])
+
+                if tile.state == State.UNCOVERED:
+                    value_render = self._font.render(str(tile.value), True, theme.text)
+                    value_pos = [
+                        center[0] - value_render.get_width() / 2,
+                        center[1] - value_render.get_height() / 2,
+                    ]
+                    self.screen.blit(value_render, value_pos)
+
+        mistakes_text = self._font.render(
+            f"Mistakes: {self._mistakes}", True, theme.text
+        )
+        mistakes_text_pos = [
+            (self.screen.get_width() - mistakes_text.get_width()) / 2,
+            5,
+        ]
+        self.screen.blit(mistakes_text, mistakes_text_pos)
