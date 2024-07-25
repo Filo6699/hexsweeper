@@ -1,6 +1,6 @@
 from typing import Tuple
 
-from hexsweeper.enums import State
+from hexsweeper.base.enums import State
 
 
 class Tile:

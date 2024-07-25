@@ -2,8 +2,8 @@ from random import randint
 from typing import Tuple, List, Optional
 from queue import Queue
 
-from hexsweeper.enums import State, UncoverResult
-from hexsweeper.tile import Tile
+from hexsweeper.base.enums import State, UncoverResult
+from hexsweeper.base.tile import Tile
 
 
 class GroupInfo:
@@ -32,10 +32,9 @@ class Board:
         self.field: List[List[Tile]] = None
         self._generate_field()
 
-    @property
     def get_size(self) -> Tuple[int, int]:
         """Get the size of the board.
-        
+
         Returns `(width, height)`"""
         return (self.width, self.height)
 
@@ -47,7 +46,7 @@ class Board:
         Otherwise returns True
         """
 
-        tile = self._get_tile(x, y)
+        tile = self.get_tile(x, y)
         if tile == None:
             return False
         if tile.state == State.UNCOVERED:
@@ -67,7 +66,7 @@ class Board:
         Otherwise returns `UncoverResult.SUCCESS`
         """
 
-        tile = self._get_tile(x, y)
+        tile = self.get_tile(x, y)
         if tile == None or tile.state != State.COVERED:
             return UncoverResult.NOTVALID
 
@@ -87,10 +86,10 @@ class Board:
 
         return UncoverResult.SUCCESS
 
-    def _get_tile(self, x: int, y: int) -> Optional[Tile]:
+    def get_tile(self, x: int, y: int) -> Optional[Tile]:
         """
         Returns a tile on given `x` and `y`
-        
+
         If a tile doesn't exist, returns None
         """
 
@@ -133,7 +132,7 @@ class Board:
                 if offset_x == 0 and offset_y == 0:
                     continue
 
-                tile = self._get_tile(x + offset_x, y + offset_y)
+                tile = self.get_tile(x + offset_x, y + offset_y)
                 if tile != None:
                     tiles.append(tile)
 
@@ -162,7 +161,9 @@ class Board:
         self.field = []
         mines_everywhere = self.mine_count >= (self.width * self.height)
         for y in range(self.height):
-            row = [Tile(mines_everywhere, State.COVERED, x, y) for x in range(self.width)]
+            row = [
+                Tile(mines_everywhere, State.COVERED, x, y) for x in range(self.width)
+            ]
             self.field.append(row)
 
         if not mines_everywhere:
